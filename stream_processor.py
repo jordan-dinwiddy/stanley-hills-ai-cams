@@ -57,7 +57,7 @@ def process_rtsp_stream(rtsp_url):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")  # Unique timestamp for the frame
 
             # Run inference once per second
-            if current_time - last_inference_time >= 0.2:
+            if current_time - last_inference_time >= 0.5:
                 last_inference_time = current_time
                 logging.info(f"Running inference on frame {frame_count}...")
 
