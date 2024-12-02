@@ -90,4 +90,8 @@ def process_rtsp_stream(rtsp_url):
 if __name__ == "__main__":
     # Replace with your camera's RTSP URL
     rtsp_url = "rtsps://10.1.1.134:7441/3W12O36llGYVR68L?enableSrtp"
+
+    # Print log messages to the console
+    logging.info(f"Opening RTSP stream: {rtsp_url}")
+
     process_rtsp_stream(rtsp_url)
