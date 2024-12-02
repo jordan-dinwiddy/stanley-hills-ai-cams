@@ -1,13 +1,19 @@
 # Setup Instructions
+Requires Python **3.11**
 
 ## Dev environment setup
 ```bash
-# Check python version
+# Make sure python and pip and venv installed
+sudo apt install python3-venv python3-pip
+
+# Setup virtual environment
+python3 -m venv venv
+
+# Activate
+source venv/bin/activate
+
 python3 --version 
 > Python 3.11.10
-
-# Activate python environment
-source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -19,13 +25,17 @@ python3 stream_processor.py
 ## Other commands / reference / notes
 ```bash
 
+sudo apt install python3-venv python3-pip
+source venv/bin/activate
+
+
 
 pip install opencv-python-headless ultralytics torch torchvision
 
 
 
 # Create a virtual environment, this creates a virtual environment in a folder named env.
-python -m venv env
+python -m venv venv
 
 # Activate virtual environment
 source env/bin/activate
