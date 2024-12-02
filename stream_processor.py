@@ -18,10 +18,10 @@ output_dir = "output_frames"
 os.makedirs(output_dir, exist_ok=True)
 latest_frame_file = os.path.join(output_dir, "latest_frame.jpg")  # Always contains the latest frame
 
-executor = ThreadPoolExecutor(max_workers=2)
+executor = ThreadPoolExecutor(max_workers=1)
 
 # Initialize the DeepSORT tracker
-tracker = DeepSort(max_age=30, n_init=1, nms_max_overlap=0.5)
+tracker = DeepSort(max_age=30, n_init=1, nms_max_overlap=1)
 
 def update_tracks_async(detections, frame):
     return tracker.update_tracks(detections, frame=frame)
@@ -95,10 +95,10 @@ def process_rtsp_stream(rtsp_url):
 
                 # Update DeepSORT tracker
                 start_time = time.time()
-                #tracked_objects = tracker.update_tracks(detections, frame=frame)
+                tracked_objects = tracker.update_tracks(detections, frame=frame)
 
-                future = executor.submit(update_tracks_async, detections, frame)
-                tracked_objects = future.result()
+                #future = executor.submit(update_tracks_async, detections, frame)
+                #tracked_objects = future.result()
 
                 elapsed_time = (time.time() - start_time)*1000
                 print(f"Time taken to update tracks: {elapsed_time:.2f} ms")
