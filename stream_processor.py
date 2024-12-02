@@ -5,6 +5,7 @@ import time
 import os
 from datetime import datetime
 from deep_sort_realtime.deepsort_tracker import DeepSort
+from concurrent.futures import ThreadPoolExecutor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -17,8 +18,13 @@ output_dir = "output_frames"
 os.makedirs(output_dir, exist_ok=True)
 latest_frame_file = os.path.join(output_dir, "latest_frame.jpg")  # Always contains the latest frame
 
+executor = ThreadPoolExecutor(max_workers=2)
+
 # Initialize the DeepSORT tracker
-tracker = DeepSort(max_age=30, n_init=1, nms_max_overlap=1.0)
+tracker = DeepSort(max_age=30, n_init=1, nms_max_overlap=0.5)
+
+def update_tracks_async(detections, frame):
+    return tracker.update_tracks(detections, frame=frame)
 
 def resize_frame(frame, target_width):
     """Resize frame to target width while maintaining aspect ratio."""
@@ -34,6 +40,9 @@ def emit_event(object_id, object_class):
 def process_rtsp_stream(rtsp_url):
     """Ingest RTSP stream, run YOLO detection on frames, and track objects."""
     cap = cv2.VideoCapture(rtsp_url)
+    #cap.set(cv2.CAP_PROP_FPS, 10)  # Set RTSP stream FPS to 10
+    #cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    #cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     if not cap.isOpened():
         logging.error(f"Failed to open RTSP stream: {rtsp_url}")
         return
@@ -48,8 +57,10 @@ def process_rtsp_stream(rtsp_url):
         while True:
             ret, frame = cap.read()
             if not ret:
-                logging.warning("Failed to read frame. Reconnecting...")
-                time.sleep(1)
+                logging.warning("Failed to grab frame. Reconnecting...")
+                cap.release()
+                time.sleep(2)  # Wait before attempting reconnection
+                cap = cv2.VideoCapture(rtsp_url)
                 continue
 
             frame_count += 1
@@ -83,7 +94,14 @@ def process_rtsp_stream(rtsp_url):
                 logging.info(f"Detections array: {detections}")
 
                 # Update DeepSORT tracker
-                tracked_objects = tracker.update_tracks(detections, frame=frame)
+                start_time = time.time()
+                #tracked_objects = tracker.update_tracks(detections, frame=frame)
+
+                future = executor.submit(update_tracks_async, detections, frame)
+                tracked_objects = future.result()
+
+                elapsed_time = (time.time() - start_time)*1000
+                print(f"Time taken to update tracks: {elapsed_time:.2f} ms")
 
                 # Annotate and log tracked objects
                 for track in tracked_objects:
@@ -129,6 +147,8 @@ def process_rtsp_stream(rtsp_url):
                     cv2.imwrite(frame_file, frame)
                     logging.info(f"Saved new detection frame to {frame_file}")
 
+            
+
 
     except KeyboardInterrupt:
         logging.info("Stream processing stopped by user.")
@@ -138,7 +158,9 @@ def process_rtsp_stream(rtsp_url):
 
 if __name__ == "__main__":
     # Replace with your camera's RTSP URL
-    rtsp_url = "rtsps://10.1.1.134:7441/3W12O36llGYVR68L?enableSrtp"
+    #rtsp_url = "rtsps://10.1.1.134:7441/3W12O36llGYVR68L?enableSrtp"
+    rtsp_url = "rtsps://10.1.1.134:7441/yRVYjAD4IBbBr9kp?enableSrtp"
+    #rtsp_url = "rtsps://10.1.1.134:7441/eXnZyAaCSt4E6RGq?enableSrtp"
 
     # Print log messages to the console
     logging.info(f"Opening RTSP stream: {rtsp_url}")
