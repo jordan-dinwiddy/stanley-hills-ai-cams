@@ -3,28 +3,25 @@ from ultralytics import YOLO
 import logging
 import time
 import os
+import sys
 from datetime import datetime
 from deep_sort_realtime.deepsort_tracker import DeepSort
-from concurrent.futures import ThreadPoolExecutor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+# Map camera names to RTSP URLs
+CAMERA_MAP = {
+    "front_gate": "rtsps://10.1.1.134:7441/yRVYjAD4IBbBr9kp?enableSrtp",
+    "back_top": "rtsps://10.1.1.134:7441/lJ7KOEYMDHkRNwFc?enableSrtp",
+    "back_deck": "rtsps://10.1.1.134:7441/LUKhL6povLN1KYO7?enableSrtp"
+}
+
 # Load the YOLO model (pre-trained on COCO dataset)
 model = YOLO('yolov8n.pt')  # Replace with fine-tuned model if available
 
-# Directory to save frames
-output_dir = "output_frames"
-os.makedirs(output_dir, exist_ok=True)
-latest_frame_file = os.path.join(output_dir, "latest_frame.jpg")  # Always contains the latest frame
-
-executor = ThreadPoolExecutor(max_workers=1)
-
 # Initialize the DeepSORT tracker
 tracker = DeepSort(max_age=30, n_init=1, nms_max_overlap=1)
-
-def update_tracks_async(detections, frame):
-    return tracker.update_tracks(detections, frame=frame)
 
 def resize_frame(frame, target_width):
     """Resize frame to target width while maintaining aspect ratio."""
@@ -37,7 +34,7 @@ def emit_event(object_id, object_class):
     """Emit an event for a newly detected object."""
     logging.info(f"Event: New {object_class} detected with ID {object_id}!")
 
-def process_rtsp_stream(rtsp_url):
+def process_rtsp_stream(camera_name, rtsp_url):
     """Ingest RTSP stream, run YOLO detection on frames, and track objects."""
     cap = cv2.VideoCapture(rtsp_url)
     #cap.set(cv2.CAP_PROP_FPS, 10)  # Set RTSP stream FPS to 10
@@ -46,6 +43,10 @@ def process_rtsp_stream(rtsp_url):
     if not cap.isOpened():
         logging.error(f"Failed to open RTSP stream: {rtsp_url}")
         return
+    
+    output_dir = os.path.join("output_frames", camera_name)
+    os.makedirs(output_dir, exist_ok=True)
+    latest_frame_file = os.path.join(output_dir, "latest_frame.jpg")  # Always contains the latest frame
 
     frame_count = 0
     last_inference_time = 0
@@ -70,7 +71,7 @@ def process_rtsp_stream(rtsp_url):
             # Run inference once per second
             if current_time - last_inference_time >= 0.5:
                 last_inference_time = current_time
-                logging.info(f"Running inference on frame {frame_count}...")
+                logging.info(f"Processing frame {frame_count} from camera: {camera_name}")
 
                 # Run the frame through the YOLO model
                 results = model(frame, conf=0.5)
@@ -96,9 +97,6 @@ def process_rtsp_stream(rtsp_url):
                 # Update DeepSORT tracker
                 start_time = time.time()
                 tracked_objects = tracker.update_tracks(detections, frame=frame)
-
-                #future = executor.submit(update_tracks_async, detections, frame)
-                #tracked_objects = future.result()
 
                 elapsed_time = (time.time() - start_time)*1000
                 print(f"Time taken to update tracks: {elapsed_time:.2f} ms")
@@ -157,12 +155,19 @@ def process_rtsp_stream(rtsp_url):
         logging.info("RTSP stream closed.")
 
 if __name__ == "__main__":
-    # Replace with your camera's RTSP URL
-    #rtsp_url = "rtsps://10.1.1.134:7441/3W12O36llGYVR68L?enableSrtp"
-    rtsp_url = "rtsps://10.1.1.134:7441/yRVYjAD4IBbBr9kp?enableSrtp"
-    #rtsp_url = "rtsps://10.1.1.134:7441/eXnZyAaCSt4E6RGq?enableSrtp"
+    if len(sys.argv) < 2:
+        logging.error("Usage: python script.py <camera_name>")
+        sys.exit(1)
+
+    camera_name = sys.argv[1]
+    if camera_name not in CAMERA_MAP:
+        logging.error(f"Invalid camera name '{camera_name}'. Valid names: {', '.join(CAMERA_MAP.keys())}")
+        sys.exit(1)
+
 
     # Print log messages to the console
+    rtsp_url = CAMERA_MAP[camera_name]
+    logging.info(f"Using camera: {camera_name}")
     logging.info(f"Opening RTSP stream: {rtsp_url}")
 
-    process_rtsp_stream(rtsp_url)
+    process_rtsp_stream(camera_name, rtsp_url)
